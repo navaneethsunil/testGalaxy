@@ -1,0 +1,42 @@
+---
+- name: List all Softwares
+  hosts: all
+  vars:
+    uuids: |
+      {%- set o=[] %}
+      {%- for i in play_hosts %}
+        {%- if o.append(hostvars[i].uuid) %}
+        {%- endif %}
+      {%- endfor %}
+      {{ o }}
+  tasks:
+  - name: Initialize empty lists to store software names, host ip, and versions
+    set_fact:
+      snames: []
+      sversions: []
+      shost: []
+
+  - name: List all software into the software variable in dictionary form
+    yum:
+      list: installed
+    register: software
+
+  - name: add name, host ip and version to lists 
+    with_items: "{{ software | json_query('results[*]') }}"
+    set_fact:
+      snames: "{{ snames + [ item.name ] }}"
+      shost: "{{ shost + [ ansible_ssh_host ] }}"
+      sversions: "{{ sversions + [ item.version ] }}"
+      
+  - name: combine name, host ip, and version list into one variable
+    set_fact:
+        uuid: "{{ shost | zip(snames) | map('join', ', ') | zip(sversions) | map('join', ', ') | join('\n') }}"
+
+  - name: write list of softwares into excel files
+    delegate_to: 192.168.1.41
+    copy:
+      content: "{{ uuids | join(', ') }}"
+      dest: "SoftwareList.csv"
+
+  - debug:
+        msg: "List of all programs on the host has been created in the home directory."
